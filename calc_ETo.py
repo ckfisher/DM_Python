@@ -25,7 +25,7 @@ def gradstime2datetime(str):
     return date
 
 def Extract_Data_Period_Average(idate_out,fdate_out,dt_down,dt_up,dt,ctl_in,var,type,open_type,forecast):
-
+ #Start up the grads instance
  ga = grads.GrADS(Bin=grads_exe,Window=False,Echo=False)
  #Open access to the control file
  ga("%s %s" % (open_type,ctl_in))
@@ -117,12 +117,14 @@ def Calc_ETo(date):
   print date
   ga = grads.GrADS(Bin=grads_exe,Window=False,Echo=False)
 
+  #Setting time variables for the data extraction
   idate_tstep = date
   fdate_tstep = date
   dt_up = relativedelta.relativedelta(days=0)
   dt_down = relativedelta.relativedelta(days=0)
   type = 'all'
   
+  #Read in the continent mask for use later on 
   mask_file = 'http://stream.princeton.edu:9090/dods/LAFDM/MASK'
   ga("sdfopen %s" % mask_file)
   ga('set t 1')
@@ -130,7 +132,7 @@ def Calc_ETo(date):
   mask[mask<0] = np.nan
   ga("close 1")
 
-
+  #If the data is before 2003 use PGF as the forcings
   if date < datetime.datetime(2003,1,1):
     vic_file = 'http://stream.princeton.edu:9090/dods/LAFDM/VIC_PGF/DAILY'
     forcing_file = 'http://stream.princeton.edu:9090/dods/LAFDM/PGF/DAILY'
@@ -138,6 +140,7 @@ def Calc_ETo(date):
     tmin = np.squeeze(Extract_Data_Period_Average(idate_tstep,fdate_tstep,dt_down,dt_up,dt,forcing_file,"tmin",type,"sdfopen",False))
     tmax = np.squeeze(Extract_Data_Period_Average(idate_tstep,fdate_tstep,dt_down,dt_up,dt,forcing_file,"tmax",type,"sdfopen",False))
     wind = np.squeeze(Extract_Data_Period_Average(idate_tstep,fdate_tstep,dt_down,dt_up,dt,forcing_file,"wind",type,"sdfopen",False))
+  #Otherwise use the GFS analysis fields as forcings (TRMM period)
   else: 
     vic_file = 'http://stream.princeton.edu:9090/dods/LAFDM/VIC_3B42RT/DAILY'
     forcing_file = 'http://stream.princeton.edu:9090/dods/LAFDM/GFS_ANALYSIS_BC/DAILY'
@@ -173,7 +176,9 @@ def Calc_ETo(date):
 
   return
 
-
+## Start of Main Code
+#Specify region dimensions
+#Should be the same as ctl files you are pulling from
 dims = {}
 dims['minlat'] = -55.875000 
 dims['minlon'] = -118.375000 
@@ -184,20 +189,22 @@ dims['maxlat'] = dims['minlat'] + dims['res']*(dims['nlat']-1)
 dims['maxlon'] = dims['minlon'] + dims['res']*(dims['nlon']-1)
 dt = datetime.timedelta(days=1)
 #fdate = datetime.datetime.today() - 3*dt
-fdate = datetime.datetime(2002,12,31)
+fdate = datetime.datetime(2002,1,31)
 idate = datetime.datetime(2002,1,1)
 
+#Extra date variables
 date = idate
 n = (fdate - idate).days
-print n
+#print n
 
+#Initialize multiproccessing job 
 num = 0
 p = []
+#Specify number of threads to use
 pool = mp.Pool(processes=16)
+#Call function with a set of args (needs to come from a list or for loop that can be iterated)
 results = [pool.apply_async(Calc_ETo,args=([date + datetime.timedelta(days=num)])) for num in range(0,n+1)]
+#Collect all output from function
+#None here since we just save images
 output = [p.get() for p in results]
 
-#while date <= fdate:
-#  print date
-#  Calc_ETo(date)
-#  date = date + dt
